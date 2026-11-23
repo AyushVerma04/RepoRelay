@@ -926,14 +926,15 @@ export async function runSandboxedApp(
     await container.start();
 
     const info = await container.inspect();
-    const ports = info.NetworkSettings.Ports;
+    const ports: any = info.NetworkSettings?.Ports || {};
 
     let mappedPort = 0;
     let allMapped = '';
 
-    for (const [internalPort, bindings] of Object.entries(ports)) {
-      if (bindings && bindings.length > 0) {
-        const p = parseInt(bindings[0].HostPort, 10);
+    for (const [internalPort, rawBindings] of Object.entries(ports)) {
+      const bindings = rawBindings as any[];
+      if (Array.isArray(bindings) && bindings.length > 0) {
+        const p = parseInt(bindings[0]?.HostPort, 10);
         allMapped += `  ${internalPort} → localhost:${p}\n`;
         if (!mappedPort || internalPort === `${projectInfo.primaryPort}/tcp`) {
           mappedPort = p;

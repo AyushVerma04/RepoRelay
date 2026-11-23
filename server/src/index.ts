@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 5000;
 
 // CORS configuration supporting localhost, Vercel deployments (*.vercel.app), and custom client origins
 app.use(cors({
-  origin: (origin, callback) => {
+  origin: (origin: any, callback: any) => {
     if (!origin) return callback(null, true);
     if (
       origin.includes('localhost') ||
@@ -35,7 +35,7 @@ app.use(cors({
 app.use(express.json());
 
 // Root welcome & discovery route for health probes and browsers
-app.get('/', (req, res) => {
+app.get('/', (req: any, res: any) => {
   res.json({
     status: 'ok',
     service: 'RepoRelay Execution Engine API',
@@ -51,7 +51,7 @@ app.get('/', (req, res) => {
 });
 
 // Health check endpoints (compatible with Render, Railway, uptime monitors)
-app.get(['/health', '/api/health'], (req, res) => {
+app.get(['/health', '/api/health'], (req: any, res: any) => {
   res.json({
     status: 'ok',
     message: 'GitHub Sandboxed Execution Agent API is running.',
