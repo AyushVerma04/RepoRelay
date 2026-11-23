@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User, ShieldCheck, Mail, MapPin, Database, Activity, History, LogOut } from 'lucide-react';
+import { API_URL } from '../config/api';
 
 export const ProfileView: React.FC<{ userId: string; onLogout: () => void }> = ({ userId, onLogout }) => {
   const [history, setHistory] = useState<any[]>([]);
@@ -8,13 +9,13 @@ export const ProfileView: React.FC<{ userId: string; onLogout: () => void }> = (
   useEffect(() => {
     if (userId) {
       // Fetch History
-      fetch(`http://localhost:5000/api/history/${userId}`)
+      fetch(`${API_URL}/history/${userId}`)
         .then(res => res.json())
         .then(data => setHistory(data))
         .catch(err => console.error(err));
       
       // Fetch User Info
-      fetch(`http://localhost:5000/api/user/${userId}`)
+      fetch(`${API_URL}/user/${userId}`)
         .then(res => res.json())
         .then(data => {
             setProfile({

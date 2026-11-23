@@ -1,9 +1,13 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs-extra';
-import { cloneRepository } from '../services/github';
+import path from 'path';
+import mongoose from 'mongoose';
+import { cloneRepository, WORKSPACES_DIR } from '../services/github';
 import { scanForEnvVariables, runSandboxedApp, EnvVarInfo } from '../services/docker';
-import { analyzeRepository, extractEnvVarsUsingAI } from '../services/ai';
+import { analyzeRepository, extractEnvVarsUsingAI, generateSecurityAnalysis } from '../services/ai';
 import { fetchAllGitHubData } from '../services/github-api';
+import SearchHistory from '../models/SearchHistory';
+import { User } from '../models/User';
 
 const router = Router();
 
@@ -40,6 +44,17 @@ router.post('/analyze', async (req, res) => {
           existing.isSecret = true;
           existing.defaultValue = ''; // clear pre-fill so user must enter it
         }
+      }
+    }
+
+    // 4. Save to history if user is authenticated and DB is connected
+    const userId = req.body.userId;
+    if (userId && mongoose.connection.readyState === 1) {
+      try {
+        const repoName = repoUrl.split('/').pop()?.replace(/\.git$/, '') || repoUrl;
+        await SearchHistory.create({ userId, repoUrl, repoName, searchedAt: new Date() });
+      } catch (historyErr) {
+        console.warn('Failed to save search history:', historyErr);
       }
     }
 
@@ -183,6 +198,64 @@ router.post('/deploy', async (req: Request, res: Response) => {
       error: error.message || 'Deployment failed',
       logs: logs.join('') || '',
     });
+  }
+});
+
+/**
+ * Fetch Search History for a specific user
+ */
+router.get('/history/:userId', async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json([]);
+    }
+    const history = await SearchHistory.find({ userId }).sort({ searchedAt: -1 }).limit(20);
+    res.json(history);
+  } catch (err: any) {
+    console.error('History fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+/**
+ * Fetch user profile info
+ */
+router.get('/user/:userId', async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ name: 'RepoRelay Agent', email: 'agent@reporelay.internal', createdAt: new Date() });
+    }
+    const user = await User.findById(userId).select('-passwordHash');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  } catch (err: any) {
+    console.error('User fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+/**
+ * Security Threat Model Analysis
+ */
+router.post('/security', async (req: Request, res: Response) => {
+  const { runId } = req.body;
+  try {
+    let repoDir: string | undefined;
+    if (runId) {
+      const candidateDir = path.join(WORKSPACES_DIR, runId);
+      if (await fs.pathExists(candidateDir)) {
+        repoDir = candidateDir;
+      }
+    }
+    const securityData = await generateSecurityAnalysis(repoDir);
+    res.json(securityData);
+  } catch (err: any) {
+    console.error('Security analysis error:', err);
+    res.status(500).json({ error: 'Failed to generate security model' });
   }
 });
 

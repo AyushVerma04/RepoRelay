@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldAlert, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { API_URL } from '../config/api';
 
 export const SecurityView: React.FC<{ analysis: any }> = ({ analysis }) => {
   const [loading, setLoading] = useState(false);
@@ -8,7 +9,7 @@ export const SecurityView: React.FC<{ analysis: any }> = ({ analysis }) => {
   useEffect(() => {
     if (!analysis?.runId) return;
     setLoading(true);
-    fetch('http://localhost:5000/api/security', {
+    fetch(`${API_URL}/security`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ runId: analysis.runId })

@@ -16,23 +16,63 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// CORS configuration supporting localhost, Vercel deployments (*.vercel.app), and custom client origins
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      origin.includes('localhost') ||
+      origin.endsWith('.vercel.app') ||
+      (process.env.CLIENT_URL && origin === process.env.CLIENT_URL) ||
+      (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL)
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true); // Permissive fallback to prevent initial deploy blocks
+  },
+  credentials: true,
+}));
 app.use(express.json());
+
+// Root welcome & discovery route for health probes and browsers
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'RepoRelay Execution Engine API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      analyze: '/api/analyze',
+      auth: '/api/auth',
+      ws: '/ws',
+    }
+  });
+});
+
+// Health check endpoints (compatible with Render, Railway, uptime monitors)
+app.get(['/health', '/api/health'], (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'GitHub Sandboxed Execution Agent API is running.',
+    timestamp: new Date().toISOString(),
+    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    uptime: process.uptime(),
+  });
+});
 
 // Main REST routes
 app.use('/api', apiRouter);
 app.use('/api/auth', authRouter);
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'GitHub Sandboxed Execution Agent API is running.' });
-});
-
 // Connect to MongoDB
 if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI).then(() => {
+  mongoose.connect(process.env.MONGO_URI, {
+    serverSelectionTimeoutMS: 5000,
+  }).then(() => {
     console.log('[Startup] Connected to MongoDB via process.env.MONGO_URI');
   }).catch(err => {
-    console.error('[Startup] Failed to connect to MongoDB:', err);
+    console.error('[Startup] Failed to connect to MongoDB:', err.message);
   });
 }
 

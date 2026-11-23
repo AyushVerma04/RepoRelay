@@ -6,6 +6,7 @@ import { Landing } from './views/Landing';
 import { RepositoryView } from './views/RepositoryView';
 import { SecurityView } from './views/SecurityView';
 import { ProfileView } from './views/ProfileView';
+import { API_URL, getWsUrl } from './config/api';
 
 interface EnvVarInfo {
   key: string;
@@ -71,7 +72,7 @@ export default function App() {
     setCurrentView('dashboard'); // Switch to dashboard view when analysis starts
 
     try {
-      const res = await fetch('http://localhost:5000/api/analyze', {
+      const res = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl, userId }),
@@ -93,7 +94,7 @@ export default function App() {
     setLogs(['[SYSTEM] Connecting to RepoRelay High-Security Engine...']);
     
     // Connect WS
-    const ws = new WebSocket('ws://localhost:5000/ws');
+    const ws = new WebSocket(getWsUrl());
     wsRef.current = ws;
 
     ws.onmessage = (event) => {

@@ -1,12 +1,19 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { User, IUser } from '../models/User';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'obsidian_cipher_super_secret_key';
 
 router.post('/register', async (req: Request, res: Response) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: 'Database is currently unavailable. Please verify MongoDB Atlas cluster is unpaused and IP 0.0.0.0/0 is whitelisted.'
+    });
+  }
+
   const { email, password, name } = req.body;
 
   if (!email || !password || !name) {
@@ -41,6 +48,12 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 router.post('/login', async (req: Request, res: Response) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: 'Database is currently unavailable. Please verify MongoDB Atlas cluster is unpaused and IP 0.0.0.0/0 is whitelisted.'
+    });
+  }
+
   const { email, password } = req.body;
 
   if (!email || !password) {

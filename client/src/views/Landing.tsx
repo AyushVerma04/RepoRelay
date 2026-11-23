@@ -4,6 +4,7 @@ import {
   ChevronRight, 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { API_URL } from '../config/api';
 
 export const Landing: React.FC<{ onLogin: (token: string, user: any) => void }> = ({ onLogin }) => {
   const [showAuth, setShowAuth] = useState(false);
@@ -19,7 +20,7 @@ export const Landing: React.FC<{ onLogin: (token: string, user: any) => void }> 
     setLoading(true);
     setError('');
     try {
-      const url = isRegistering ? 'http://localhost:5000/api/auth/register' : 'http://localhost:5000/api/auth/login';
+      const url = isRegistering ? `${API_URL}/auth/register` : `${API_URL}/auth/login`;
       const body = isRegistering ? JSON.stringify({ email, password, name }) : JSON.stringify({ email, password });
       
       const res = await fetch(url, {
