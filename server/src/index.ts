@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
+import dns from 'dns';
 import fs from 'fs-extra';
 import mongoose from 'mongoose';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -10,6 +11,11 @@ import authRouter from './routes/auth';
 import { runSandboxedApp } from './services/docker';
 import path from 'path';
 import { WORKSPACES_DIR } from './services/github';
+
+// Ensure DNS SRV queries resolve reliably on cloud container networks
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {}
 
 dotenv.config();
 
@@ -57,6 +63,7 @@ app.get(['/health', '/api/health'], (req: any, res: any) => {
     message: 'GitHub Sandboxed Execution Agent API is running.',
     timestamp: new Date().toISOString(),
     mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    mongoConfigured: !!process.env.MONGO_URI,
     uptime: process.uptime(),
   });
 });
@@ -65,16 +72,26 @@ app.get(['/health', '/api/health'], (req: any, res: any) => {
 app.use('/api', apiRouter);
 app.use('/api/auth', authRouter);
 
-// Connect to MongoDB
-if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI, {
-    serverSelectionTimeoutMS: 5000,
-  }).then(() => {
+// Connect to MongoDB with auto-retry
+async function connectMongoWithRetry() {
+  if (!process.env.MONGO_URI) {
+    console.warn('[Startup] No MONGO_URI provided in environment variables.');
+    return;
+  }
+  if (mongoose.connection.readyState === 1) return;
+
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
     console.log('[Startup] Connected to MongoDB via process.env.MONGO_URI');
-  }).catch(err => {
-    console.error('[Startup] Failed to connect to MongoDB:', err.message);
-  });
+  } catch (err: any) {
+    console.error('[Startup] Failed to connect to MongoDB, retrying in 5s...', err.message);
+    setTimeout(connectMongoWithRetry, 5000);
+  }
 }
+
+connectMongoWithRetry();
 
 
 const server = http.createServer(app);
