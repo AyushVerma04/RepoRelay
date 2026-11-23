@@ -64,6 +64,8 @@ app.get(['/health', '/api/health'], (req: any, res: any) => {
     timestamp: new Date().toISOString(),
     mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     mongoConfigured: !!process.env.MONGO_URI,
+    groqConfigured: !!process.env.GROQ_API_KEY,
+    githubTokenConfigured: !!process.env.GITHUB_TOKEN,
     uptime: process.uptime(),
   });
 });
@@ -94,44 +96,99 @@ async function connectMongoWithRetry() {
 connectMongoWithRetry();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WORKSPACE PREVIEW ENGINE (Serves deployed sandboxed apps without Docker)
+// WORKSPACE PREVIEW ENGINE (Serves deployed sandboxed apps with full CSS/JS/Images)
 // ─────────────────────────────────────────────────────────────────────────────
-app.get('/preview/:runId', async (req: any, res: any) => {
-  const { runId } = req.params;
-  const repoDir = path.join(WORKSPACES_DIR, runId);
-  if (!(await fs.pathExists(repoDir))) {
-    return res.status(404).send('Workspace preview not found or expired.');
-  }
 
-  // Look for index.html in common build or source locations
+async function findIndexHtml(repoDir: string): Promise<{ fullPath: string; relDir: string } | null> {
   const candidates = [
     'index.html',
     'dist/index.html',
     'build/index.html',
+    'public/index.html',
     'client/dist/index.html',
     'client/build/index.html',
     'client/index.html',
-    'public/index.html',
+    'frontend/dist/index.html',
     'frontend/index.html',
   ];
 
   for (const rel of candidates) {
     const full = path.join(repoDir, rel);
     if (await fs.pathExists(full)) {
-      if (rel === 'index.html') {
-        return res.sendFile(full);
+      const relDir = path.dirname(rel);
+      return { fullPath: full, relDir: relDir === '.' ? '' : relDir };
+    }
+  }
+  return null;
+}
+
+// 1. Force trailing slash on /preview/:runId so relative assets like style.css resolve to /preview/:runId/style.css
+app.get('/preview/:runId', (req: any, res: any) => {
+  res.redirect(301, `/preview/${req.params.runId}/`);
+});
+
+// 2. Main preview route serving HTML with injected <base> tag and serving all sub-assets (CSS, JS, images)
+app.get('/preview/:runId/*', async (req: any, res: any, next: any) => {
+  const { runId } = req.params;
+  const subPath = req.params[0] || '';
+  const repoDir = path.join(WORKSPACES_DIR, runId);
+
+  if (!(await fs.pathExists(repoDir))) {
+    return res.status(404).send('Workspace preview not found or expired.');
+  }
+
+  const indexMatch = await findIndexHtml(repoDir);
+  const baseDir = indexMatch && indexMatch.relDir ? path.join(repoDir, indexMatch.relDir) : repoDir;
+
+  // If requesting the root of preview or index.html
+  if (!subPath || subPath === 'index.html') {
+    if (indexMatch && (await fs.pathExists(indexMatch.fullPath))) {
+      try {
+        let html = await fs.readFile(indexMatch.fullPath, 'utf8');
+        // Inject <base href="/preview/${runId}/"> so ALL relative CSS, JS, fonts, and images resolve
+        const baseTag = `<base href="/preview/${runId}/">`;
+        if (html.includes('<head>')) {
+          html = html.replace('<head>', `<head>\n    ${baseTag}`);
+        } else if (html.includes('<html>')) {
+          html = html.replace('<html>', `<html>\n<head>${baseTag}</head>`);
+        } else {
+          html = `${baseTag}\n${html}`;
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+      } catch (err: any) {
+        return res.status(500).send('Error reading index.html: ' + err.message);
       }
-      return res.redirect(`/preview/${runId}/${rel.replace(/\/index\.html$/, '')}`);
     }
   }
 
-  res.redirect(`/preview/${runId}/`);
+  // Look for requested asset (style.css, script.js, img.png, etc.) across candidate directories
+  const candidateFilePaths = [
+    path.join(baseDir, subPath),
+    path.join(repoDir, subPath),
+    path.join(repoDir, 'dist', subPath),
+    path.join(repoDir, 'public', subPath),
+    path.join(repoDir, 'client', subPath),
+    path.join(repoDir, 'client', 'dist', subPath),
+    path.join(repoDir, 'client', 'public', subPath),
+    path.join(repoDir, 'frontend', subPath),
+  ];
+
+  for (const candidate of candidateFilePaths) {
+    if (await fs.pathExists(candidate)) {
+      const stat = await fs.stat(candidate);
+      if (stat.isFile()) {
+        return res.sendFile(candidate);
+      }
+    }
+  }
+
+  next();
 });
 
-// Serve static assets for the workspaces (css, js, images, html)
+// 3. Fallback static directory handler
 app.use('/preview', express.static(WORKSPACES_DIR, {
   dotfiles: 'allow',
-  index: ['index.html', 'index.htm'],
 }));
 
 const server = http.createServer(app);
@@ -160,7 +217,7 @@ wss.on('connection', (ws: WebSocket) => {
           if (result.containerId.startsWith('cloud-')) {
             const hostUrl = process.env.RENDER_EXTERNAL_URL || (process.env.PORT ? 'https://reporelay.onrender.com' : `http://localhost:${PORT}`);
             const baseOrigin = hostUrl.startsWith('http') ? hostUrl : `https://${hostUrl}`;
-            url = `${baseOrigin}/preview/${runId}`;
+            url = `${baseOrigin}/preview/${runId}/`;
           } else {
             url = `http://localhost:${result.hostPort}`;
           }
