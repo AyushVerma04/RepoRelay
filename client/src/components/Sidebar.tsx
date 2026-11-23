@@ -6,6 +6,7 @@ import {
   LogOut,
   ChevronRight
 } from 'lucide-react';
+import logoImg from '../assets/logo.png';
 
 export type ViewType = 'landing' | 'dashboard' | 'security' | 'profile' | 'deployment';
 
@@ -29,7 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onL
       <div className="py-8 pl-[12px] pr-8 mb-4">
         <div className="flex items-center space-x-3 group cursor-pointer" onClick={() => onViewChange('landing')}>
           <img 
-            src="/logo.png" 
+            src={logoImg} 
             alt="RepoRelay Logo" 
             className="w-16 h-16 object-contain transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" 
           />

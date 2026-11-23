@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_URL } from '../config/api';
+import logoImg from '../assets/logo.png';
 
 export const Landing: React.FC<{ onLogin: (token: string, user: any) => void }> = ({ onLogin }) => {
   const [showAuth, setShowAuth] = useState(false);
@@ -78,7 +79,21 @@ export const Landing: React.FC<{ onLogin: (token: string, user: any) => void }> 
       <div className="flex-1 flex flex-row items-center justify-between gap-0 min-h-0 py-12 relative z-10">
         
         {/* Left Side: Hero Text (45%) */}
-        <div className="flex-[1.7] flex flex-col items-start space-y-10 animate-in slide-in-from-left-8 duration-1000">
+        <div className="flex-[1.7] flex flex-col items-start space-y-8 animate-in slide-in-from-left-8 duration-1000">
+          
+          {/* Logo & Brand Header */}
+          <div className="flex items-center space-x-4 group cursor-pointer">
+            <img 
+              src={logoImg} 
+              alt="RepoRelay Logo" 
+              className="w-16 h-16 object-contain drop-shadow-[0_0_20px_rgba(59,130,246,0.6)] group-hover:scale-105 transition-transform" 
+            />
+            <div>
+              <span className="text-3xl font-black italic tracking-tighter text-white uppercase leading-none">RepoRelay</span>
+              <span className="block text-[10px] font-black tracking-widest text-[#83aeff] uppercase opacity-75">Automated Engine</span>
+            </div>
+          </div>
+
           <div className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-full bg-blue-500/5 border border-blue-500/10 text-[#83aeff] text-[10px] font-black tracking-[0.4em] uppercase shadow-lg shadow-blue-500/5">
             <Zap size={14} className="fill-[#83aeff]" />
             <span>SEAMLESS REPO AUTOMATION</span>
@@ -163,8 +178,9 @@ export const Landing: React.FC<{ onLogin: (token: string, user: any) => void }> 
         <div className="glass-card rounded-[40px] p-12 border border-zinc-800/50 shadow-2xl bg-zinc-950/80 backdrop-blur-3xl w-full max-w-md relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none group-hover:bg-blue-600/20 transition-colors duration-1000"></div>
           
-          <div className="text-center mb-10 relative z-10">
-            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-[#83aeff] italic tracking-tighter uppercase drop-shadow-sm">{isRegistering ? 'Register' : 'Log In'}</h2>
+          <div className="text-center mb-8 relative z-10 flex flex-col items-center">
+            <img src={logoImg} alt="RepoRelay" className="w-14 h-14 object-contain mb-3 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+            <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-[#83aeff] italic tracking-tighter uppercase drop-shadow-sm">{isRegistering ? 'Register' : 'Log In'}</h2>
           </div>
 
           <form className="relative z-10 space-y-6" onSubmit={handleSubmit}>

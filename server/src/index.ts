@@ -93,6 +93,46 @@ async function connectMongoWithRetry() {
 
 connectMongoWithRetry();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WORKSPACE PREVIEW ENGINE (Serves deployed sandboxed apps without Docker)
+// ─────────────────────────────────────────────────────────────────────────────
+app.get('/preview/:runId', async (req: any, res: any) => {
+  const { runId } = req.params;
+  const repoDir = path.join(WORKSPACES_DIR, runId);
+  if (!(await fs.pathExists(repoDir))) {
+    return res.status(404).send('Workspace preview not found or expired.');
+  }
+
+  // Look for index.html in common build or source locations
+  const candidates = [
+    'index.html',
+    'dist/index.html',
+    'build/index.html',
+    'client/dist/index.html',
+    'client/build/index.html',
+    'client/index.html',
+    'public/index.html',
+    'frontend/index.html',
+  ];
+
+  for (const rel of candidates) {
+    const full = path.join(repoDir, rel);
+    if (await fs.pathExists(full)) {
+      if (rel === 'index.html') {
+        return res.sendFile(full);
+      }
+      return res.redirect(`/preview/${runId}/${rel.replace(/\/index\.html$/, '')}`);
+    }
+  }
+
+  res.redirect(`/preview/${runId}/`);
+});
+
+// Serve static assets for the workspaces (css, js, images, html)
+app.use('/preview', express.static(WORKSPACES_DIR, {
+  dotfiles: 'allow',
+  index: ['index.html', 'index.htm'],
+}));
 
 const server = http.createServer(app);
 
@@ -114,13 +154,22 @@ wss.on('connection', (ws: WebSocket) => {
         };
 
         try {
-          // Note: requiredEnvVars is returned now, but we don't need it for the success signal
-          const { hostPort, containerId } = await runSandboxedApp(repoDir, imageName, envVars, logDispatcher);
-          const url = `http://localhost:${hostPort}`;
-          ws.send(JSON.stringify({ type: 'success', url, hostPort, containerId }));
-        } catch (dockerErr: any) {
-          logDispatcher(`\n[ERROR] Docker Execution Failed: ${dockerErr.message}\n`);
-          ws.send(JSON.stringify({ type: 'error', message: dockerErr.message }));
+          const result = await runSandboxedApp(repoDir, imageName, envVars, logDispatcher);
+          
+          let url = '';
+          if (result.containerId.startsWith('cloud-')) {
+            const hostUrl = process.env.RENDER_EXTERNAL_URL || (process.env.PORT ? 'https://reporelay.onrender.com' : `http://localhost:${PORT}`);
+            const baseOrigin = hostUrl.startsWith('http') ? hostUrl : `https://${hostUrl}`;
+            url = `${baseOrigin}/preview/${runId}`;
+          } else {
+            url = `http://localhost:${result.hostPort}`;
+          }
+
+          logDispatcher(`\n🎉 Live Deployment Manifest Generated: ${url}\n`);
+          ws.send(JSON.stringify({ type: 'success', url, hostPort: result.hostPort, containerId: result.containerId }));
+        } catch (execErr: any) {
+          logDispatcher(`\n[ERROR] Execution Failed: ${execErr.message}\n`);
+          ws.send(JSON.stringify({ type: 'error', message: execErr.message }));
         }
       }
     } catch (parseError) {
