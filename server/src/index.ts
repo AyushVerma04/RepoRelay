@@ -122,17 +122,22 @@ async function findIndexHtml(repoDir: string): Promise<{ fullPath: string; relDi
   return null;
 }
 
-// 1. Force trailing slash on /preview/:runId so relative assets like style.css resolve to /preview/:runId/style.css
-app.get('/preview/:runId', (req: any, res: any) => {
-  res.redirect(301, `/preview/${req.params.runId}/`);
-});
+// Main preview middleware serving HTML with injected <base> tag and resolving all sub-assets (CSS, JS, images)
+app.use('/preview', async (req: any, res: any, next: any) => {
+  const parts = req.url.split('?')[0].split('/').filter(Boolean);
+  if (parts.length === 0) {
+    return res.status(404).send('No preview runId specified.');
+  }
 
-// 2. Main preview route serving HTML with injected <base> tag and serving all sub-assets (CSS, JS, images)
-app.get('/preview/:runId/*', async (req: any, res: any, next: any) => {
-  const { runId } = req.params;
-  const subPath = req.params[0] || '';
+  const runId = parts[0];
+  const subPath = parts.slice(1).join('/');
+
+  // If accessed without trailing slash (e.g. /preview/1b9f941a...), redirect with trailing slash!
+  if (!req.url.startsWith(`/${runId}/`)) {
+    return res.redirect(301, `/preview/${runId}/`);
+  }
+
   const repoDir = path.join(WORKSPACES_DIR, runId);
-
   if (!(await fs.pathExists(repoDir))) {
     return res.status(404).send('Workspace preview not found or expired.');
   }
@@ -183,13 +188,8 @@ app.get('/preview/:runId/*', async (req: any, res: any, next: any) => {
     }
   }
 
-  next();
+  res.status(404).send(`File not found: ${subPath}`);
 });
-
-// 3. Fallback static directory handler
-app.use('/preview', express.static(WORKSPACES_DIR, {
-  dotfiles: 'allow',
-}));
 
 const server = http.createServer(app);
 
